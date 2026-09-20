@@ -1,0 +1,43 @@
+name: verify gate4ai-sync cask
+
+# One-off, manually-triggered check: runs the exact commands the
+# homebrew-cask PR template asks for, on a real macOS runner, so the
+# checkboxes in PR #288607 can be ticked honestly. Not meant to be kept
+# long-term — delete once the cask is merged (or once verified locally on
+# an actual Mac).
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  verify:
+    runs-on: macos-latest
+    env:
+      # Without this, brew reads cask metadata from its API cache instead
+      # of the tap checkout below, so audit/style would miss our change.
+      HOMEBREW_NO_INSTALL_FROM_API: "1"
+    steps:
+      - name: point the homebrew-cask tap at this branch
+        # brew resolves `<cask>` by token against the installed tap at
+        # $(brew --repository)/Library/Taps/homebrew/homebrew-cask, not
+        # against an arbitrary checkout, so swap that tap's Casks/g dir
+        # for our own before running any brew command.
+        run: |
+          tap_dir="$(brew --repository homebrew/cask)"
+          git -C "$tap_dir" fetch --depth=1 https://github.com/${{ github.repository }}.git add-gate4ai-sync
+          git -C "$tap_dir" checkout FETCH_HEAD -- Casks/g/gate4ai-sync.rb
+
+      - name: brew audit --cask --online
+        run: brew audit --cask --online gate4ai-sync
+
+      - name: brew style --fix
+        run: brew style --fix gate4ai-sync
+
+      - name: brew audit --cask --new
+        run: brew audit --cask --new gate4ai-sync
+
+      - name: brew install --cask
+        run: brew install --cask gate4ai-sync
+
+      - name: brew uninstall --cask
+        run: brew uninstall --cask gate4ai-sync
